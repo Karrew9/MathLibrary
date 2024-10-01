@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+spec:
+  replicas: 3  # Используем 3 пода, так как этого достаточно для обработки нагрузки
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - web-app
+              topologyKey: "kubernetes.io/hostname"
+      # Используем podAntiAffinity для размещения подов на разных нодах
+      # preferredDuringSchedulingIgnoredDuringExecution позволяет разместить поды на одной ноде,
+      # если нет возможности разместить их на разных (например, если нод меньше, чем подов)
+      containers:
+      - name: web-app
+        image: your-web-app-image:tag
+        resources:
+          requests:
+            cpu: 100m  # Запрашиваем 0.1 CPU, так как это стабильное потребление
+            memory: 128Mi
+          limits:
+            cpu: 500m  # Устанавливаем лимит в 0.5 CPU для обработки пиковых нагрузок при инициализации
+            memory: 128Mi
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        # Readiness probe не позволит поду обрабатывать запросы до завершения инициализации
+        # initialDelaySeconds установлен на 10 секунд, чтобы дать приложению время на инициализацию
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        # Liveness probe перезапустит под, если он перестанет отвечать
